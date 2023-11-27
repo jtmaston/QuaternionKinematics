@@ -1,3 +1,5 @@
+info = rendererinfo(gca)
+
 % Pt research
 % Paper1: Reprezintare axis-ang prin unitate
 % x: cos(theta/2) + i sin(theta/2)
@@ -181,23 +183,19 @@ linkAxes = [3, 1, 1, 1, 1, 1];
 % Axis 2
 
 
-angleArr120   = [45, 45, 45, 45, 45, 45];
+angleArr120   = [30, 45, 0, 0, 0, 0];
 rotAxis120    = [3, 2, 2, 1, 2, 1];
 axisOffsets = [ 0, 0, 290       ;  ...
                 0, 0, 270       ;  ...
-                0, 0, 70      ; ...
-                302, 0, 0 ; ...
+                134, 0, 70      ; ...
+                302 - 134, 0, 0 ; ...
                 72, 0, 0        ; ...
     ];
-
-% since we don't care about the roll's point of action, we will translate
-% axis 4 slightly rearword, eliminating the diagonal.
-
 ee = calculateDual(angleArr120, rotAxis120, axisOffsets);
 [x, y, z, t] = parts(ee);
 fprintf("Final link position: %.2f %.2f %.2f %.2f\n", ...
         x, y, z, t);
-plotPoints = zeros(7, 3);
+plotPoints = zeros(6, 3);
 
 function EE = calculateDual(angleArr, rotAxis, axisOffsets, plotPoints) 
     [r,c] = size(angleArr);                                  
@@ -210,10 +208,11 @@ function EE = calculateDual(angleArr, rotAxis, axisOffsets, plotPoints)
 
     finalLinkT = quaternion(0, 0, 0, 0);
     finalLinkR = quaternion(1, 0, 0, 0);
-    offset = 1;
-    
-    %c = 4;
+    offset = 0;
+
     for i = 1 : (c - 1)
+    
+    %for i = 1 : 3
         switch rotAxis(i)
             case 1
                 rot = rpy(-deg2rad(angleArr(i)), 0, 0);
@@ -222,6 +221,22 @@ function EE = calculateDual(angleArr, rotAxis, axisOffsets, plotPoints)
             case 3
                 rot = rpy(0, 0, -deg2rad(angleArr(i)));
         end
+        
+            
+        %if i == 3
+        %    blackMagicFkery = quaternion(0, 0, 0, axisOffsets(i, 3));
+        %    blackMagicFkery = conj(finalLinkR) * blackMagicFkery * finalLinkR;
+        %    
+        %    axisOffsets(i, 3) = 0;
+        %    finalLinkT = finalLinkT + blackMagicFkery;
+        %    
+        %    [~, y, z, t] = parts(finalLinkT);
+        %    plotPoints(i + offset, 1) = y;
+        %    plotPoints(i + offset, 2) = z;
+        %    plotPoints(i + offset, 3) = t;
+
+        %    offset = offset + 1;
+        % end
 
         link = quaternion(0, ...
             axisOffsets(i, 1), ...
@@ -232,36 +247,71 @@ function EE = calculateDual(angleArr, rotAxis, axisOffsets, plotPoints)
         fprintf("At link %d: %.2f %.2f %.2f %.2f\n", i, x, y, z, t);
 
         rotLoc = rot * finalLinkR;
-        rotated =conj(rotLoc) * link * rotLoc;
+        rotated = conj(rotLoc) * link * rotLoc;
 
         [x, y, z, t] = parts(rotated);
         fprintf("After rotation, at link %d: %.2f %.2f %.2f %.2f\n", i, x, y, z, t);
         finalLinkT = finalLinkT + rotated;
-        %finalLinkT = rotated;
-        fprintf("Orientation at position is: %.2f %.2f %.2f\n", getRPYFromQuaternion(finalLinkR))
 
         [~, y, z, t] = parts(finalLinkT);
         plotPoints(i + offset, 1) = y;
         plotPoints(i + offset, 2) = z;
         plotPoints(i + offset, 3) = t;
 
-        finalLinkR = rot * finalLinkR;
+        finalLinkR = finalLinkR * rot;
     end
 
 
     fprintf("Final link orientation: %.2f %.2f %.2f\n", ...
         getRPYFromQuaternion(finalLinkR));
+    
+    plot3(plotPoints(:,1), plotPoints(:,2), plotPoints(:,3),'LineWidth',8);
+    %plot(plotPoints(:,1), plotPoints(:,3), 'LineWidth',8, 'MarkerSize',20);
+    %plot(plotPoints(:,1), plotPoints(:,2), 'LineWidth',8, 'MarkerSize',20);
+    xlim([-600, 600]);
+    %ylim([-200, 200]);
+    
 
-    [x, y, z, t] = parts(finalLinkR);
-    fprintf("Final rot q: %.2f, %.2f, %.2f, %.2f\n", x, y, z, t);
-    
-    plot3(plotPoints(:,1), plotPoints(:,2), plotPoints(:,3),'LineWidth',8, 'Marker', 'o');
-    %plot(plotPoints(:,1), plotPoints(:,3), 'LineWidth',8 , 'Marker', 'o');
-    %plot(plotPoints(:,1), plotPoints(:,2), 'LineWidth',8, 'Marker', 'o');
-    xlim([0, 350]);
-    ylim([0, 350]);
-    
     EE = finalLinkT;
+end
+
+%%% 13.11 %%%
+function EE = calculateEELAXDep(angleArr, rotAxis, linkLengths, linkAxes) 
+    [r,c] = size(angleArr);                                  
+
+    if ~((r > 1) | (c > 1))
+        disp("this function operates on an angle array")
+        EE = NaN;
+        return;
+    end
+
+    finalLink = quaternion(0, 0, 0, 0);
+    for i = 1 : c
+        switch rotAxis(i)
+            case 1
+                rot = rpy(deg2rad(angleArr(i)), 0, 0);
+            case 2
+                rot = rpy(0, deg2rad(angleArr(i)), 0);
+            case 3
+                rot = rpy(0, 0, deg2rad(angleArr(i)));
+        end
+
+        switch linkAxes(i)
+            case 1
+                link = quaternion(0, linkLengths(i), 0, 0);
+                rotated = conj(rot) * link * rot;
+            case 2
+                link = quaternion(0, 0, linkLengths(i), 0);
+                rotated = conj(rot) * link * rot;
+            case 3
+                link = quaternion(0, 0, 0, linkLengths(i));
+                rotated = rot * link * conj(rot);
+        end
+        finalLink = finalLink + rotated;
+    end
+    
+    reallignRot = rpy(0, 0, deg2rad(angleArr(1)));
+    EE = reallignRot * finalLink * conj(reallignRot);
 end
 
 function uvw = getRPYFromQuaternion(quat)
@@ -271,9 +321,81 @@ function uvw = getRPYFromQuaternion(quat)
     u = rad2deg(atan2(2*(q0*q1+q2*q3), q0^2 - q1^2 - q2^2 + q3 ^ 2));
     w = rad2deg(atan2(2*(q0*q3+q1*q2), q0^2 + q1^2 - q2^2 - q3 ^ 2));
 
+    %AAAAA GIMBAL LOCK! AAAAA AM UITAT DE GIMBAL LOCCCCCKKKK
     % nota: functia asta e pacatoasa, si ar trebui evitata. Ma rog,
     % sa zicem ca pentru debugging merge, dar ar trebui sa nu.
+
+
+
     uvw = [u, v, w];
+end
+
+%%% 6.11 %%%
+function EE = calculateEE(angleArr, rotAxis, linkLengths)
+    [r,c] = size(angleArr);
+
+    if ~((r > 1) | (c > 1))
+        disp("this function operates on an angle array")
+        EE = NaN;
+        return;
+    end
+
+    finalLink = quaternion(0, 0, 0, 0);
+    for i = 1 : 2
+        switch rotAxis(i)
+            case 1
+                rot = rpy(deg2rad(angleArr(i)), 0, 0);
+                link = quaternion(0, linkLengths(i), 0, 0);
+            case 2
+                rot = rpy(0, deg2rad(angleArr(i)), 0);
+                link = quaternion(0, 0, 0, 0);
+            case 3
+                rot = rpy(0, 0, deg2rad(angleArr(i)));
+                link = quaternion(0, 0, 0, linkLengths(i));
+        end
+        
+
+        
+        rotated = conj(rot) * link * rot;
+        finalLink = finalLink + rotated;
+    end
+    EE = finalLink;
+end
+
+function EE = calculateEELAX(angleArr, rotAxis, linkLengths, linkAxes) 
+    [r,c] = size(angleArr);                                  
+
+    if ~((r > 1) | (c > 1))
+        disp("this function operates on an angle array")
+        EE = NaN;
+        return;
+    end
+
+    finalLink = quaternion(0, 0, 0, 0);
+    for i = 1 : c
+        switch rotAxis(i)
+            case 1
+                rot = rpy(deg2rad(angleArr(i)), 0, 0);
+            case 2
+                rot = rpy(0, deg2rad(angleArr(i)), 0);
+            case 3
+                rot = rpy(0, 0, deg2rad(angleArr(i)));
+        end
+
+        switch linkAxes(i)
+            case 1
+                link = quaternion(0, linkLengths(i), 0, 0);
+            case 2
+                link = quaternion(0, 0, linkLengths(i), 0);
+            case 3
+                link = quaternion(0, 0, 0, linkLengths(i));
+        end
+        
+
+        rotated = conj(rot) * link * rot;
+        finalLink = finalLink + rotated;
+    end
+    EE = finalLink;
 end
 
 function rad = deg2rad(deg)
